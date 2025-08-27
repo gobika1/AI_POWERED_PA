@@ -1,1 +1,21 @@
-{}
+{
+  "ignore_dirs": [
+    ".git",
+    "node_modules",
+    ".cache",
+    "build",
+    "dist",
+    "coverage",
+    ".nyc_output",
+    ".next",
+    ".nuxt",
+    ".cache",
+    "android/build",
+    "ios/build"
+  ],
+  "fsevents_latency": 0.05,
+  "fsevents_try_resync": true,
+  "defer_recrawl": true,
+  "defer_vcs": true,
+  "defer_watchman": true
+}

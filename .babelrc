@@ -1,0 +1,19 @@
+{
+  "presets": ["@react-native/babel-preset"],
+  "plugins": [
+    ["@babel/plugin-transform-runtime", {
+      "regenerator": true,
+      "helpers": true,
+      "useESModules": false
+    }]
+  ],
+  "env": {
+    "development": {
+      "compact": false,
+      "retainLines": true
+    },
+    "production": {
+      "compact": true
+    }
+  }
+}
