@@ -108,6 +108,8 @@ function AppContent() {
   const [newsData, setNewsData] = useState<NewsArticle[]>([]);
   const [isVoiceAvailable, setIsVoiceAvailable] = useState(false);
   const [isWakeWordActive, setIsWakeWordActive] = useState(false);
+  const [location, setLocation] = useState<string>('New York');
+  const [locationInput, setLocationInput] = useState<string>('');
 
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -135,25 +137,22 @@ function AppContent() {
     initVoice();
   }, []);
 
-  // Initialize weather data
+  // Initialize weather data and update when location changes
   useEffect(() => {
     const fetchWeather = async () => {
       try {
-        // Try to get weather for a default city (you can change this)
-        const weatherResponse = await weatherService.getCurrentWeather('New York');
+        const weatherResponse = await weatherService.getCurrentWeather(location);
         
         if (weatherResponse.success && weatherResponse.data) {
           setWeatherData(weatherResponse.data);
           setWeather(weatherService.formatWeatherDisplay(weatherResponse.data));
         } else {
-          // Use mock data if API fails
           const mockData = weatherService.getMockWeatherData();
           setWeatherData(mockData);
           setWeather(weatherService.formatWeatherDisplay(mockData));
-          }
-        } catch (error) {
+        }
+      } catch (error) {
         console.log('Weather fetch error:', error);
-        // Use mock data as fallback
         const mockData = weatherService.getMockWeatherData();
         setWeatherData(mockData);
         setWeather(weatherService.formatWeatherDisplay(mockData));
@@ -161,32 +160,30 @@ function AppContent() {
     };
 
     fetchWeather();
-  }, []);
+  }, [location]);
 
-  // Initialize news data
+  // Initialize and update news when location changes
   useEffect(() => {
     const fetchNews = async () => {
       try {
-        // Try to get top headlines
-        const newsResponse = await newsService.getTopHeadlines('us');
+        // Prefer city-specific search; fallback to top headlines
+        const newsResponse = await newsService.searchNews(location, 'en');
         
         if (newsResponse.success && newsResponse.articles) {
           setNewsData(newsResponse.articles);
         } else {
-          // Use mock data if API fails
           const mockData = newsService.getMockNewsData();
           setNewsData(mockData);
         }
       } catch (error) {
         console.log('News fetch error:', error);
-        // Use mock data as fallback
         const mockData = newsService.getMockNewsData();
         setNewsData(mockData);
       }
     };
 
     fetchNews();
-  }, []);
+  }, [location]);
 
   // Initialize wake word
   useEffect(() => {
@@ -273,6 +270,37 @@ function AppContent() {
 
     // Simple AI responses
     let response = '';
+    
+    // Location-aware intents
+    const setLocationMatch = userInput.match(/^(?:set\s+(?:location|city)\s*(?:to)?|change\s+(?:location|city)\s*(?:to)?)\s+([a-zA-Z\s]+)$/i);
+    const weatherInMatch = userInput.match(/weather\s+(?:in|at|for)\s+([a-zA-Z\s]+)$/i);
+    const newsInMatch = userInput.match(/(?:news|headlines)\s+(?:in|at|for)\s+([a-zA-Z\s]+)$/i);
+    if (setLocationMatch) {
+      const city = setLocationMatch[1].trim();
+      if (city) {
+        setLocation(city);
+        addMessage('assistant', `Location updated to ${city}. Fetching weather and news...`);
+        await refreshWeather(city);
+        await refreshNews(city);
+        return;
+      }
+    }
+    if (weatherInMatch) {
+      const city = weatherInMatch[1].trim();
+      if (city) {
+        addMessage('assistant', `Sure, getting the weather for ${city}...`);
+        await refreshWeather(city);
+        return;
+      }
+    }
+    if (newsInMatch) {
+      const city = newsInMatch[1].trim();
+      if (city) {
+        addMessage('assistant', `Here are some recent stories around ${city}...`);
+        await refreshNews(city);
+        return;
+      }
+    }
     
     if (userInput.toLowerCase().includes('joke')) {
       response = "Why did the scarecrow win an award? Because he was outstanding in his field! 😄";
@@ -417,37 +445,39 @@ function AppContent() {
   };
 
   // Refresh weather data
-  const refreshWeather = async () => {
+  const refreshWeather = async (city?: string) => {
+    const targetCity = (city || location).trim();
     try {
-      const weatherResponse = await weatherService.getCurrentWeather('New York');
+      const weatherResponse = await weatherService.getCurrentWeather(targetCity);
       
       if (weatherResponse.success && weatherResponse.data) {
         setWeatherData(weatherResponse.data);
         setWeather(weatherService.formatWeatherDisplay(weatherResponse.data));
         addMessage('assistant', `Weather updated! ${weatherService.formatWeatherDisplay(weatherResponse.data)}`);
       } else {
-        addMessage('assistant', 'Sorry, I couldn\'t fetch the latest weather data. Please try again later.');
+        addMessage('assistant', `Sorry, I couldn't fetch the latest weather data for ${targetCity}.`);
       }
     } catch (error) {
       console.log('Weather refresh error:', error);
-      addMessage('assistant', 'Sorry, I couldn\'t refresh the weather data. Please try again later.');
+      addMessage('assistant', `Sorry, I couldn't refresh the weather data for ${targetCity}.`);
     }
   };
 
   // Refresh news data
-  const refreshNews = async () => {
+  const refreshNews = async (cityOrQuery?: string) => {
+    const query = (cityOrQuery || location).trim();
     try {
-      const newsResponse = await newsService.getTopHeadlines('us');
+      const newsResponse = await newsService.searchNews(query, 'en');
       
       if (newsResponse.success && newsResponse.articles) {
         setNewsData(newsResponse.articles);
-        addMessage('assistant', 'News updated! Here are the latest headlines:\n\n' + newsService.formatNewsSummary(newsResponse.articles, 3));
-    } else {
-        addMessage('assistant', 'Sorry, I couldn\'t fetch the latest news. Please try again later.');
+        addMessage('assistant', 'News updated! Here are recent headlines:\n\n' + newsService.formatNewsSummary(newsResponse.articles, 3));
+      } else {
+        addMessage('assistant', `Sorry, I couldn't find news for ${query}.`);
       }
     } catch (error) {
       console.log('News refresh error:', error);
-      addMessage('assistant', 'Sorry, I couldn\'t refresh the news. Please try again later.');
+      addMessage('assistant', `Sorry, I couldn't refresh the news for ${query}.`);
     }
   };
 
@@ -514,6 +544,36 @@ function AppContent() {
                 {weatherData ? weatherService.getWeatherEmoji(weatherData.icon) : '🌤️'} {weather}
               </Text>
                 </TouchableOpacity>
+            <View style={styles.locationRow}>
+              <TextInput
+                style={styles.locationInput}
+                placeholder={`Enter city (e.g., Chennai)`}
+                placeholderTextColor="#CCCCCC"
+                value={locationInput}
+                onChangeText={setLocationInput}
+                onSubmitEditing={() => {
+                  const city = locationInput.trim();
+                  if (city) {
+                    setLocation(city);
+                    setLocationInput('');
+                  }
+                }}
+                returnKeyType="done"
+              />
+              <TouchableOpacity
+                style={styles.setLocationButton}
+                onPress={() => {
+                  const city = locationInput.trim();
+                  if (city) {
+                    setLocation(city);
+                    setLocationInput('');
+                  }
+                }}
+              >
+                <Text style={styles.setLocationButtonText}>Set</Text>
+              </TouchableOpacity>
+              <Text style={styles.currentLocationText}>📍 {location}</Text>
+            </View>
           </View>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutButtonText}>Logout</Text>
@@ -805,6 +865,36 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 8,
+  },
+  locationInput: {
+    flex: 1,
+    backgroundColor: '#2C2C4A',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: '#FFFFFF',
+    fontSize: 14,
+  },
+  setLocationButton: {
+    backgroundColor: '#008080',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  setLocationButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  currentLocationText: {
+    color: '#FFFFFF',
+    fontSize: 12,
   },
 });
 
