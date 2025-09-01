@@ -112,6 +112,7 @@ function AppContent() {
   const [userName, setUserName] = useState('User');
   const [isVoiceAvailable, setIsVoiceAvailable] = useState(false);
   const [isWakeWordActive, setIsWakeWordActive] = useState(false);
+<<<<<<< HEAD
   
   // Meeting/Reminder modal state
   const [isReminderModalVisible, setIsReminderModalVisible] = useState(false);
@@ -121,6 +122,10 @@ function AppContent() {
   const [reminderTime, setReminderTime] = useState('');
   const [reminderPriority, setReminderPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [reminderType, setReminderType] = useState<'reminder' | 'meeting' | 'task'>('reminder');
+=======
+  const [location, setLocation] = useState<string>('New York');
+  const [locationInput, setLocationInput] = useState<string>('');
+>>>>>>> 7b32c0d59f6f33b99f9202c3c957c8d6fb145ab5
 
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -203,10 +208,15 @@ function AppContent() {
     initVoice();
   }, []);
 
+<<<<<<< HEAD
   // Initialize Firebase Cloud Messaging
+=======
+  // Initialize weather data and update when location changes
+>>>>>>> 7b32c0d59f6f33b99f9202c3c957c8d6fb145ab5
   useEffect(() => {
     const initFCM = async () => {
       try {
+<<<<<<< HEAD
         await initializeFCM();
         console.log('FCM initialized successfully');
       } catch (error) {
@@ -216,6 +226,51 @@ function AppContent() {
 
     initFCM();
   }, []);
+=======
+        const weatherResponse = await weatherService.getCurrentWeather(location);
+        
+        if (weatherResponse.success && weatherResponse.data) {
+          setWeatherData(weatherResponse.data);
+          setWeather(weatherService.formatWeatherDisplay(weatherResponse.data));
+        } else {
+          const mockData = weatherService.getMockWeatherData();
+          setWeatherData(mockData);
+          setWeather(weatherService.formatWeatherDisplay(mockData));
+        }
+      } catch (error) {
+        console.log('Weather fetch error:', error);
+        const mockData = weatherService.getMockWeatherData();
+        setWeatherData(mockData);
+        setWeather(weatherService.formatWeatherDisplay(mockData));
+      }
+    };
+
+    fetchWeather();
+  }, [location]);
+
+  // Initialize and update news when location changes
+  useEffect(() => {
+    const fetchNews = async () => {
+      try {
+        // Prefer city-specific search; fallback to top headlines
+        const newsResponse = await newsService.searchNews(location, 'en');
+        
+        if (newsResponse.success && newsResponse.articles) {
+          setNewsData(newsResponse.articles);
+        } else {
+          const mockData = newsService.getMockNewsData();
+          setNewsData(mockData);
+        }
+      } catch (error) {
+        console.log('News fetch error:', error);
+        const mockData = newsService.getMockNewsData();
+        setNewsData(mockData);
+      }
+    };
+
+    fetchNews();
+  }, [location]);
+>>>>>>> 7b32c0d59f6f33b99f9202c3c957c8d6fb145ab5
 
   // Initialize wake word
   useEffect(() => {
@@ -492,6 +547,37 @@ function AppContent() {
     // Simple AI responses
     let response = '';
     
+    // Location-aware intents
+    const setLocationMatch = userInput.match(/^(?:set\s+(?:location|city)\s*(?:to)?|change\s+(?:location|city)\s*(?:to)?)\s+([a-zA-Z\s]+)$/i);
+    const weatherInMatch = userInput.match(/weather\s+(?:in|at|for)\s+([a-zA-Z\s]+)$/i);
+    const newsInMatch = userInput.match(/(?:news|headlines)\s+(?:in|at|for)\s+([a-zA-Z\s]+)$/i);
+    if (setLocationMatch) {
+      const city = setLocationMatch[1].trim();
+      if (city) {
+        setLocation(city);
+        addMessage('assistant', `Location updated to ${city}. Fetching weather and news...`);
+        await refreshWeather(city);
+        await refreshNews(city);
+        return;
+      }
+    }
+    if (weatherInMatch) {
+      const city = weatherInMatch[1].trim();
+      if (city) {
+        addMessage('assistant', `Sure, getting the weather for ${city}...`);
+        await refreshWeather(city);
+        return;
+      }
+    }
+    if (newsInMatch) {
+      const city = newsInMatch[1].trim();
+      if (city) {
+        addMessage('assistant', `Here are some recent stories around ${city}...`);
+        await refreshNews(city);
+        return;
+      }
+    }
+    
     if (userInput.toLowerCase().includes('joke')) {
       response = "Why did the scarecrow win an award? Because he was outstanding in his field! 😄";
     } else if (userInput.toLowerCase().includes('hello') || userInput.toLowerCase().includes('hi')) {
@@ -599,6 +685,7 @@ function AppContent() {
       return;
     }
 
+<<<<<<< HEAD
     try {
       // Create due date from date and time inputs
       const dueDate = new Date();
@@ -656,6 +743,38 @@ function AppContent() {
         );
       } else {
         addMessage('assistant', `${reminderType === 'meeting' ? 'Meeting' : 'Reminder'} "${reminderTitle}" has been saved, but notification scheduling failed. Please check your notification permissions.`);
+=======
+  // Refresh weather data
+  const refreshWeather = async (city?: string) => {
+    const targetCity = (city || location).trim();
+    try {
+      const weatherResponse = await weatherService.getCurrentWeather(targetCity);
+      
+      if (weatherResponse.success && weatherResponse.data) {
+        setWeatherData(weatherResponse.data);
+        setWeather(weatherService.formatWeatherDisplay(weatherResponse.data));
+        addMessage('assistant', `Weather updated! ${weatherService.formatWeatherDisplay(weatherResponse.data)}`);
+      } else {
+        addMessage('assistant', `Sorry, I couldn't fetch the latest weather data for ${targetCity}.`);
+      }
+    } catch (error) {
+      console.log('Weather refresh error:', error);
+      addMessage('assistant', `Sorry, I couldn't refresh the weather data for ${targetCity}.`);
+    }
+  };
+
+  // Refresh news data
+  const refreshNews = async (cityOrQuery?: string) => {
+    const query = (cityOrQuery || location).trim();
+    try {
+      const newsResponse = await newsService.searchNews(query, 'en');
+      
+      if (newsResponse.success && newsResponse.articles) {
+        setNewsData(newsResponse.articles);
+        addMessage('assistant', 'News updated! Here are recent headlines:\n\n' + newsService.formatNewsSummary(newsResponse.articles, 3));
+      } else {
+        addMessage('assistant', `Sorry, I couldn't find news for ${query}.`);
+>>>>>>> 7b32c0d59f6f33b99f9202c3c957c8d6fb145ab5
       }
 
       // Reset form
@@ -668,8 +787,13 @@ function AppContent() {
       
       console.log('Reminder created and saved to Firestore:', reminderId);
     } catch (error) {
+<<<<<<< HEAD
       console.error('Error creating reminder:', error);
       Alert.alert('Error', 'Failed to create reminder. Please try again.');
+=======
+      console.log('News refresh error:', error);
+      addMessage('assistant', `Sorry, I couldn't refresh the news for ${query}.`);
+>>>>>>> 7b32c0d59f6f33b99f9202c3c957c8d6fb145ab5
     }
   };
 
@@ -932,6 +1056,44 @@ function AppContent() {
           <View style={styles.headerLeft}>
             <Text style={styles.headerTitle}>AI Personal Assistant</Text>
             <Text style={styles.userGreeting}>Welcome, {userName}!</Text>
+<<<<<<< HEAD
+=======
+            <TouchableOpacity onPress={refreshWeather} style={styles.weatherContainer}>
+              <Text style={styles.weatherInfo}>
+                {weatherData ? weatherService.getWeatherEmoji(weatherData.icon) : '🌤️'} {weather}
+              </Text>
+                </TouchableOpacity>
+            <View style={styles.locationRow}>
+              <TextInput
+                style={styles.locationInput}
+                placeholder={`Enter city (e.g., Chennai)`}
+                placeholderTextColor="#CCCCCC"
+                value={locationInput}
+                onChangeText={setLocationInput}
+                onSubmitEditing={() => {
+                  const city = locationInput.trim();
+                  if (city) {
+                    setLocation(city);
+                    setLocationInput('');
+                  }
+                }}
+                returnKeyType="done"
+              />
+              <TouchableOpacity
+                style={styles.setLocationButton}
+                onPress={() => {
+                  const city = locationInput.trim();
+                  if (city) {
+                    setLocation(city);
+                    setLocationInput('');
+                  }
+                }}
+              >
+                <Text style={styles.setLocationButtonText}>Set</Text>
+              </TouchableOpacity>
+              <Text style={styles.currentLocationText}>📍 {location}</Text>
+            </View>
+>>>>>>> 7b32c0d59f6f33b99f9202c3c957c8d6fb145ab5
           </View>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutButtonText}>Logout</Text>
@@ -1463,6 +1625,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+<<<<<<< HEAD
   // Modal styles
   modalContainer: {
     flex: 1,
@@ -1592,6 +1755,37 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#FFFFFF',
     textAlign: 'center',
+=======
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 8,
+  },
+  locationInput: {
+    flex: 1,
+    backgroundColor: '#2C2C4A',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: '#FFFFFF',
+    fontSize: 14,
+  },
+  setLocationButton: {
+    backgroundColor: '#008080',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  setLocationButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  currentLocationText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+>>>>>>> 7b32c0d59f6f33b99f9202c3c957c8d6fb145ab5
   },
 });
 
