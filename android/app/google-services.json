@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "123456789000",
-    "project_id": "aipoweredpa-voice",
-    "storage_bucket": "aipoweredpa-voice.appspot.com"
+    "project_number": "222809660841",
+    "project_id": "aipowered-d6194",
+    "storage_bucket": "aipowered-d6194.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:123456789000:android:abcdef1234567890",
+        "mobilesdk_app_id": "1:222809660841:android:3c24ef57dce197567838b8",
         "android_client_info": {
           "package_name": "com.aipoweredpa"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyYourApiKeyHere1234567890"
+          "current_key": "AIzaSyCND20OWSEALqP7AW4zYYMWhJcILX96Y54"
         }
       ],
       "services": {

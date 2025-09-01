@@ -13,6 +13,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import auth from '@react-native-firebase/auth';
 
 const { width, height } = Dimensions.get('window');
 
@@ -38,31 +39,115 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
       return;
     }
 
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
+    // Validate password length
+    if (password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters long');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // For demo purposes, accept any valid email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        Alert.alert('Error', 'Please enter a valid email address');
-        return;
-      }
-
-      // Success - call the onLogin callback
-      onLogin({
-        email: email.trim(),
-        name: name.trim() || email.split('@')[0], // Use email prefix as name if not provided
+      // Add timeout for Firebase operations
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Authentication timeout')), 10000); // 10 second timeout
       });
-
-    } catch (error) {
-      Alert.alert('Error', 'Login failed. Please try again.');
+      let authPromise;
+      
+      if (isLogin) {
+        // Sign in existing user
+        authPromise = auth().signInWithEmailAndPassword(email.trim(), password);
+      } else {
+        // Create new user account
+        authPromise = auth().createUserWithEmailAndPassword(email.trim(), password);
+      }
+      
+      // Race between auth operation and timeout
+      const userCredential = await Promise.race([authPromise, timeoutPromise]) as any;
+      const user = userCredential.user;
+      
+      if (user) {
+        if (!isLogin) {
+          // Update user profile with name for new users
+          await user.updateProfile({
+            displayName: name.trim(),
+          });
+        }
+        
+        // Success - call the onLogin callback
+        onLogin({
+          email: user.email || email.trim(),
+          name: user.displayName || name.trim() || email.split('@')[0],
+        });
+      }
+    } catch (error: any) {
+      console.error('Authentication error:', error);
+      
+      let errorMessage = 'Authentication failed. Please try again.';
+      
+      // Handle specific Firebase Auth errors
+      switch (error.code) {
+        case 'auth/user-not-found':
+          errorMessage = 'No account found with this email. Please check your email or sign up.';
+          break;
+        case 'auth/wrong-password':
+          errorMessage = 'Incorrect password. Please try again.';
+          break;
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email address format.';
+          break;
+        case 'auth/user-disabled':
+          errorMessage = 'This account has been disabled.';
+          break;
+        case 'auth/email-already-in-use':
+          errorMessage = 'An account with this email already exists. Please sign in instead.';
+          setIsLogin(true); // Switch to login mode
+          break;
+        case 'auth/weak-password':
+          errorMessage = 'Password is too weak. Please use a stronger password.';
+          break;
+        case 'auth/network-request-failed':
+          errorMessage = 'Network error. Please check your internet connection.';
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = 'Too many failed attempts. Please try again later.';
+          break;
+        case 'auth/invalid-credential':
+          errorMessage = 'Invalid login credentials. Please check your email and password and try again.';
+          break;
+        case 'auth/credential-already-in-use':
+          errorMessage = 'These credentials are already associated with another account.';
+          break;
+        case 'auth/operation-not-allowed':
+          errorMessage = 'Email/password authentication is not enabled. Please contact support.';
+          break;
+        case 'Authentication timeout':
+          errorMessage = 'Connection timeout. Please check your internet connection and Firebase configuration.';
+          break;
+        default:
+          // Check if it's a Firestore permission error
+          if (error.message && error.message.includes('firestore/permission-denied')) {
+            errorMessage = 'Database access denied. Please ensure Firestore security rules are properly configured.';
+          } else if (error.message && error.message.includes('invalid-credential')) {
+            errorMessage = 'Invalid login credentials. Please verify your email and password.';
+          } else {
+            errorMessage = error.message || 'Authentication failed. Please try again.';
+          }
+      }
+      
+      Alert.alert('Authentication Error', errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
+
 
   const toggleMode = () => {
     setIsLogin(!isLogin);
@@ -153,12 +238,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
               </Text>
             </TouchableOpacity>
 
-            {/* Demo Credentials */}
-            <View style={styles.demoContainer}>
-              <Text style={styles.demoTitle}>Demo Credentials:</Text>
-              <Text style={styles.demoText}>Email: demo@example.com</Text>
-              <Text style={styles.demoText}>Password: password123</Text>
-            </View>
           </View>
 
           {/* Footer */}
@@ -255,25 +334,6 @@ const styles = StyleSheet.create({
   toggleButtonTextBold: {
     color: '#008080',
     fontWeight: 'bold',
-  },
-  demoContainer: {
-    backgroundColor: '#2C2C4A',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#3C3C5A',
-  },
-  demoTitle: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  demoText: {
-    color: '#CCCCCC',
-    fontSize: 12,
-    marginBottom: 4,
   },
   footer: {
     alignItems: 'center',

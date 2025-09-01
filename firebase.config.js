@@ -1,15 +1,13 @@
 import { initializeApp } from '@react-native-firebase/app';
 
-// TODO: Replace these values with your real Firebase project configuration
-// Get these from: Firebase Console → Project Settings → Your Apps → Android App
+// Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyBCuP6d_Z8ApUJWZo5A2xaqsAW05o9OBIs", // Replace with real API key
-  authDomain: "aipoweredpa-voice.firebaseapp.com", // Replace with real domain
-  projectId: "aipoweredpa-voice", // Replace with real project ID
-  storageBucket: "aipoweredpa-voice.appspot.com", // Replace with real bucket
-  messagingSenderId: "300552847997", // Replace with real sender ID
-  appId: "1:300552847997:android:391f00e7ae017a2904a714", // Replace with real app ID
-  measurementId: "G-6565656565" // Replace with real measurement ID (optional)
+  apiKey: "AIzaSyCND20OWSEALqP7AW4zYYMWhJcILX96Y54",
+  authDomain: "aipowered-d6194.firebaseapp.com",
+  projectId: "aipowered-d6194",
+  storageBucket: "aipowered-d6194.firebasestorage.app",
+  messagingSenderId: "222809660841",
+  appId: "1:222809660841:android:54f22155a8492f717838b8"
 };
 
 // Initialize Firebase

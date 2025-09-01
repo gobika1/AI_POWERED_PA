@@ -1,6 +1,8 @@
 // News Service for AI Personal Assistant
 // Fetches real-time news data from NewsAPI
 
+import cacheService from './cache.service';
+
 interface NewsArticle {
   title: string;
   description: string;
@@ -23,110 +25,175 @@ class NewsService {
   private apiKey: string = '4db23a369b2d4b468f88ab27ff7c88a1'; // Replace with your NewsAPI key
   private baseUrl: string = 'https://newsapi.org/v2';
 
-  // Get top headlines
-  async getTopHeadlines(country: string = 'us', category?: string): Promise<NewsResponse> {
+  // Get top headlines with caching
+  async getTopHeadlines(query: string = 'general', country: string = 'us'): Promise<NewsArticle[]> {
     try {
-      let url = `${this.baseUrl}/top-headlines?country=${country}&apiKey=${this.apiKey}`;
-      if (category) {
-        url += `&category=${category}`;
+      const cacheKey = `headlines_${query}_${country}`;
+      
+      // Check cache first
+      const cachedNews = cacheService.get<NewsArticle[]>('news', cacheKey);
+      if (cachedNews) {
+        console.log(`Using cached news data for ${query}`);
+        return cachedNews;
+      }
+
+      // If query is a category, use category endpoint
+      const categories = this.getNewsCategories();
+      let url: string;
+      
+      if (categories.includes(query.toLowerCase()) || query === 'general') {
+        const category = query === 'general' ? '' : query.toLowerCase();
+        url = `${this.baseUrl}/top-headlines?country=${country}&apiKey=${this.apiKey}`;
+        if (category) {
+          url += `&category=${category}`;
+        }
+      } else {
+        // Use search endpoint for specific queries
+        url = `${this.baseUrl}/everything?q=${encodeURIComponent(query)}&language=en&sortBy=publishedAt&apiKey=${this.apiKey}`;
       }
 
       const response = await fetch(url);
 
       if (!response.ok) {
+        if (response.status === 429) {
+          console.warn('News API rate limit exceeded');
+          return this.getMockNewsData();
+        }
         throw new Error(`News API error: ${response.status}`);
       }
 
       const data = await response.json();
+      const articles = data.articles || [];
       
-      return {
-        success: true,
-        articles: data.articles || []
-      };
+      // Filter out removed articles and return top 10
+      const filteredArticles = articles
+        .filter((article: NewsArticle) => 
+          article.title && 
+          article.title !== '[Removed]' && 
+          article.description && 
+          article.description !== '[Removed]'
+        )
+        .slice(0, 10);
+      
+      // Cache the result
+      cacheService.set('news', cacheKey, filteredArticles);
+      
+      return filteredArticles;
     } catch (error) {
       console.error('News fetch error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch news data'
-      };
+      return this.getMockNewsData();
     }
   }
 
-  // Get news by category
-  async getNewsByCategory(category: string, country: string = 'us'): Promise<NewsResponse> {
+  // Get news by category with caching
+  async getNewsByCategory(category: string, country: string = 'us'): Promise<NewsArticle[]> {
     try {
+      const cacheKey = `category_${category}_${country}`;
+      
+      // Check cache first
+      const cachedNews = cacheService.get<NewsArticle[]>('news', cacheKey);
+      if (cachedNews) {
+        console.log(`Using cached news data for category ${category}`);
+        return cachedNews;
+      }
+
       const response = await fetch(
         `${this.baseUrl}/top-headlines?country=${country}&category=${category}&apiKey=${this.apiKey}`
       );
 
       if (!response.ok) {
+        if (response.status === 429) {
+          return this.getMockNewsData();
+        }
         throw new Error(`News API error: ${response.status}`);
       }
 
       const data = await response.json();
+      const articles = data.articles || [];
       
-      return {
-        success: true,
-        articles: data.articles || []
-      };
+      const filteredArticles = articles
+        .filter((article: NewsArticle) => 
+          article.title && article.title !== '[Removed]'
+        )
+        .slice(0, 10);
+      
+      // Cache the result
+      cacheService.set('news', cacheKey, filteredArticles);
+      
+      return filteredArticles;
     } catch (error) {
       console.error('News fetch error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch news data'
-      };
+      return this.getMockNewsData();
     }
   }
 
-  // Search news by keyword
-  async searchNews(query: string, language: string = 'en'): Promise<NewsResponse> {
+  // Search news by keyword with caching
+  async searchNews(query: string, language: string = 'en'): Promise<NewsArticle[]> {
     try {
+      const cacheKey = `search_${query}_${language}`;
+      
+      // Check cache first
+      const cachedNews = cacheService.get<NewsArticle[]>('news', cacheKey);
+      if (cachedNews) {
+        console.log(`Using cached search results for ${query}`);
+        return cachedNews;
+      }
+
       const response = await fetch(
         `${this.baseUrl}/everything?q=${encodeURIComponent(query)}&language=${language}&sortBy=publishedAt&apiKey=${this.apiKey}`
       );
 
       if (!response.ok) {
+        if (response.status === 429) {
+          return this.getMockNewsData();
+        }
         throw new Error(`News API error: ${response.status}`);
       }
 
       const data = await response.json();
+      const articles = data.articles || [];
       
-      return {
-        success: true,
-        articles: data.articles || []
-      };
+      const filteredArticles = articles
+        .filter((article: NewsArticle) => 
+          article.title && article.title !== '[Removed]'
+        )
+        .slice(0, 10);
+      
+      // Cache the result
+      cacheService.set('news', cacheKey, filteredArticles);
+      
+      return filteredArticles;
     } catch (error) {
       console.error('News search error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to search news'
-      };
+      return this.getMockNewsData();
     }
   }
 
   // Get news by source
-  async getNewsBySource(source: string): Promise<NewsResponse> {
+  async getNewsBySource(source: string): Promise<NewsArticle[]> {
     try {
       const response = await fetch(
         `${this.baseUrl}/top-headlines?sources=${source}&apiKey=${this.apiKey}`
       );
 
       if (!response.ok) {
+        if (response.status === 429) {
+          return this.getMockNewsData();
+        }
         throw new Error(`News API error: ${response.status}`);
       }
 
       const data = await response.json();
+      const articles = data.articles || [];
       
-      return {
-        success: true,
-        articles: data.articles || []
-      };
+      return articles
+        .filter((article: NewsArticle) => 
+          article.title && article.title !== '[Removed]'
+        )
+        .slice(0, 10);
     } catch (error) {
       console.error('News fetch error:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch news data'
-      };
+      return this.getMockNewsData();
     }
   }
 
