@@ -22,10 +22,11 @@ import {
   Linking,
 } from 'react-native';
 import Voice from '@react-native-voice/voice';
-import { initNotifications, scheduleNotification, displayNotification, scheduleReminderWithAlerts, getReminderNotificationStatus } from './notifications';
+import { initNotifications, scheduleNotification, displayNotification, scheduleReminderWithAlerts, getReminderNotificationStatus, getScheduledNotifications } from './notifications';
 import { initWakeWord, startWakeWord, stopWakeWord, destroyWakeWord, onWakeWord } from './voice';
 import VoiceAssistant, { VoiceResponse } from './voice-assistant';
 import firestoreService, { User, UserPreferences } from './firestore.service';
+import AISmartRepliesService from './ai-smart-replies.service';
 import LoginScreen from './LoginScreen';
 import UserProfileScreen from './UserProfileScreen';
 import weatherService, { WeatherData } from './weather.service';
@@ -112,8 +113,11 @@ function AppContent() {
   const [userName, setUserName] = useState('User');
   const [isVoiceAvailable, setIsVoiceAvailable] = useState(false);
   const [isWakeWordActive, setIsWakeWordActive] = useState(false);
-<<<<<<< HEAD
-  
+  const [location, setLocation] = useState('Chennai');
+  const [locationInput, setLocationInput] = useState('');
+  const [smartReplies, setSmartReplies] = useState<string[]>([]);
+  const [showSmartReplies, setShowSmartReplies] = useState(false);
+
   // Meeting/Reminder modal state
   const [isReminderModalVisible, setIsReminderModalVisible] = useState(false);
   const [reminderTitle, setReminderTitle] = useState('');
@@ -122,10 +126,6 @@ function AppContent() {
   const [reminderTime, setReminderTime] = useState('');
   const [reminderPriority, setReminderPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [reminderType, setReminderType] = useState<'reminder' | 'meeting' | 'task'>('reminder');
-=======
-  const [location, setLocation] = useState<string>('New York');
-  const [locationInput, setLocationInput] = useState<string>('');
->>>>>>> 7b32c0d59f6f33b99f9202c3c957c8d6fb145ab5
 
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -208,15 +208,10 @@ function AppContent() {
     initVoice();
   }, []);
 
-<<<<<<< HEAD
   // Initialize Firebase Cloud Messaging
-=======
-  // Initialize weather data and update when location changes
->>>>>>> 7b32c0d59f6f33b99f9202c3c957c8d6fb145ab5
   useEffect(() => {
     const initFCM = async () => {
       try {
-<<<<<<< HEAD
         await initializeFCM();
         console.log('FCM initialized successfully');
       } catch (error) {
@@ -226,51 +221,6 @@ function AppContent() {
 
     initFCM();
   }, []);
-=======
-        const weatherResponse = await weatherService.getCurrentWeather(location);
-        
-        if (weatherResponse.success && weatherResponse.data) {
-          setWeatherData(weatherResponse.data);
-          setWeather(weatherService.formatWeatherDisplay(weatherResponse.data));
-        } else {
-          const mockData = weatherService.getMockWeatherData();
-          setWeatherData(mockData);
-          setWeather(weatherService.formatWeatherDisplay(mockData));
-        }
-      } catch (error) {
-        console.log('Weather fetch error:', error);
-        const mockData = weatherService.getMockWeatherData();
-        setWeatherData(mockData);
-        setWeather(weatherService.formatWeatherDisplay(mockData));
-      }
-    };
-
-    fetchWeather();
-  }, [location]);
-
-  // Initialize and update news when location changes
-  useEffect(() => {
-    const fetchNews = async () => {
-      try {
-        // Prefer city-specific search; fallback to top headlines
-        const newsResponse = await newsService.searchNews(location, 'en');
-        
-        if (newsResponse.success && newsResponse.articles) {
-          setNewsData(newsResponse.articles);
-        } else {
-          const mockData = newsService.getMockNewsData();
-          setNewsData(mockData);
-        }
-      } catch (error) {
-        console.log('News fetch error:', error);
-        const mockData = newsService.getMockNewsData();
-        setNewsData(mockData);
-      }
-    };
-
-    fetchNews();
-  }, [location]);
->>>>>>> 7b32c0d59f6f33b99f9202c3c957c8d6fb145ab5
 
   // Initialize wake word
   useEffect(() => {
@@ -345,6 +295,11 @@ function AppContent() {
     setTimeout(() => {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 100);
+    
+    // Generate smart replies for assistant messages
+    if (type === 'assistant') {
+      generateSmartRepliesForMessage(content);
+    }
   };
 
   // Enhanced query parsing for weather and news
@@ -436,7 +391,7 @@ function AppContent() {
         
         if (!weatherData) {
           // Fallback to default city if location services fail
-          weatherData = await weatherService.getCurrentWeather('New York');
+          weatherData = await weatherService.getCurrentWeather('Chennai');
         }
       } else {
         weatherData = await weatherService.getCurrentWeather(location);
@@ -467,42 +422,32 @@ function AppContent() {
   };
 
   // Fetch news data with improved categorization
-  const fetchNewsData = async (query?: string, category?: string, location?: string) => {
+  const refreshNews = async (cityOrQuery?: string) => {
+    const query = (cityOrQuery || location).trim();
+    console.log('Searching for news with query:', query);
+    
     try {
       setIsProcessing(true);
+      const articles = await newsService.searchNews(query, 'en');
+      console.log('News articles received:', articles?.length || 0);
       
-      let newsData: NewsArticle[] = [];
-      let searchTerm = query || category || location || 'general';
-      
-      if (category) {
-        newsData = await newsService.getNewsByCategory(category);
-        searchTerm = category;
-      } else if (query && query !== 'general') {
-        newsData = await newsService.searchNews(query);
-        searchTerm = query;
+      if (articles && articles.length > 0) {
+        const newsMessage = newsService.formatNewsSummary(articles, 5);
+        console.log('Formatted news message:', newsMessage);
+        addMessage('news', newsMessage, false, articles);
       } else {
-        newsData = await newsService.getTopHeadlines('general');
-        searchTerm = 'general';
-      }
-      
-      if (newsData.length > 0) {
-        const emoji = category ? newsService.getCategoryEmoji(category) : '📰';
-        let messageContent = '';
-        
-        if (category) {
-          messageContent = `${emoji} Here are the latest ${category} news headlines:`;
-        } else if (query && query !== 'general') {
-          messageContent = `📰 Here are news articles about "${query}":`;
+        console.log('No articles found for query:', query);
+        // Try getting general headlines if specific query fails
+        const generalArticles = await newsService.getTopHeadlines('general');
+        if (generalArticles && generalArticles.length > 0) {
+          const generalMessage = `No specific news found for "${query}". Here are today's top headlines:\n\n${newsService.formatNewsSummary(generalArticles, 5)}`;
+          addMessage('news', generalMessage, false, generalArticles);
         } else {
-          messageContent = `📰 Here are today's top news headlines:`;
+          addMessage('assistant', `Sorry, I couldn't find any news at the moment. Please try again later.`);
         }
-        
-        addMessage('news', messageContent, false, newsData);
-      } else {
-        addMessage('assistant', `Sorry, I couldn't find any news for ${searchTerm}. Please try another topic, category, or check back later.`);
       }
     } catch (error) {
-      console.error('Error fetching news:', error);
+      console.error('News refresh error:', error);
       addMessage('assistant', `Sorry, I encountered an error while fetching news. Please try again later.`);
     } finally {
       setIsProcessing(false);
@@ -523,7 +468,7 @@ function AppContent() {
     
     if (parsedQuery.type === 'weather') {
       if (parsedQuery.location) {
-        fetchWeatherData(parsedQuery.location);
+        refreshWeather(parsedQuery.location);
       } else {
         // Ask for location if not provided
         addMessage('assistant', "I can check the weather for you! Please specify a location (e.g., 'weather in London') or say 'weather here' for your current location.");
@@ -532,7 +477,7 @@ function AppContent() {
     }
 
     if (parsedQuery.type === 'news') {
-      fetchNewsData(parsedQuery.query, parsedQuery.category, parsedQuery.location);
+      refreshNews(parsedQuery.query || parsedQuery.location);
       return;
     }
 
@@ -685,20 +630,45 @@ function AppContent() {
       return;
     }
 
-<<<<<<< HEAD
     try {
       // Create due date from date and time inputs
       const dueDate = new Date();
       if (reminderDate && reminderTime) {
         const [year, month, day] = reminderDate.split('-').map(Number);
-        const [hours, minutes] = reminderTime.split(':').map(Number);
+        
+        // Parse time with AM/PM support
+        let hours: number, minutes: number;
+        const timeStr = reminderTime.toLowerCase().trim();
+        
+        if (timeStr.includes('am') || timeStr.includes('pm')) {
+          // Handle 12-hour format (e.g., "10:10 pm")
+          const isPM = timeStr.includes('pm');
+          const timeOnly = timeStr.replace(/[ap]m/g, '').trim();
+          const [hourStr, minuteStr] = timeOnly.split(':');
+          
+          hours = parseInt(hourStr);
+          minutes = parseInt(minuteStr) || 0;
+          
+          // Convert to 24-hour format
+          if (isPM && hours !== 12) {
+            hours += 12;
+          } else if (!isPM && hours === 12) {
+            hours = 0;
+          }
+        } else {
+          // Handle 24-hour format (e.g., "22:10")
+          const [hourStr, minuteStr] = timeStr.split(':');
+          hours = parseInt(hourStr);
+          minutes = parseInt(minuteStr) || 0;
+        }
+        
         dueDate.setFullYear(year, month - 1, day);
         dueDate.setHours(hours, minutes, 0, 0);
       } else {
         // Default to 1 hour from now
         dueDate.setHours(dueDate.getHours() + 1);
       }
-
+      
       // Save to Firestore
       const reminderId = await firestoreService.createReminder({
         userId: currentUserId,
@@ -723,58 +693,26 @@ function AppContent() {
 
       setReminders(prev => [...prev, newReminder]);
       
-      // Schedule notification with multiple alerts
+      // Schedule notification with 2-minute early alert
       await initNotifications();
       const notificationIds = await scheduleReminderWithAlerts({
         id: `reminder_${reminderId}`,
         title: `${reminderType === 'meeting' ? 'Meeting' : 'Reminder'}: ${reminderTitle}`,
         body: reminderDescription || 'Time for your scheduled activity!',
         timestampMs: dueDate.getTime(),
-        alertMinutes: [15, 5, 0], // Alert 15 min before, 5 min before, and at time
+        alertMinutes: [2], // Alert 2 minutes before the scheduled time
       });
 
       if (notificationIds.length > 0) {
-        addMessage('assistant', `${reminderType === 'meeting' ? 'Meeting' : 'Reminder'} "${reminderTitle}" has been saved successfully! You'll receive ${notificationIds.length} notifications: 15 minutes before, 5 minutes before, and at the scheduled time.`);
+        addMessage('assistant', `${reminderType === 'meeting' ? 'Meeting' : 'Reminder'} "${reminderTitle}" has been saved successfully! You'll receive a notification 2 minutes before the scheduled time.`);
         
         // Show a confirmation notification
         await displayNotification(
           'Reminder Scheduled ✅', 
-          `Your ${reminderType} "${reminderTitle}" is set for ${new Date(dueDate).toLocaleString()} with ${notificationIds.length} alerts`
+          `Your ${reminderType} "${reminderTitle}" is set for ${new Date(dueDate).toLocaleString()} with a 2-minute early alert`
         );
       } else {
         addMessage('assistant', `${reminderType === 'meeting' ? 'Meeting' : 'Reminder'} "${reminderTitle}" has been saved, but notification scheduling failed. Please check your notification permissions.`);
-=======
-  // Refresh weather data
-  const refreshWeather = async (city?: string) => {
-    const targetCity = (city || location).trim();
-    try {
-      const weatherResponse = await weatherService.getCurrentWeather(targetCity);
-      
-      if (weatherResponse.success && weatherResponse.data) {
-        setWeatherData(weatherResponse.data);
-        setWeather(weatherService.formatWeatherDisplay(weatherResponse.data));
-        addMessage('assistant', `Weather updated! ${weatherService.formatWeatherDisplay(weatherResponse.data)}`);
-      } else {
-        addMessage('assistant', `Sorry, I couldn't fetch the latest weather data for ${targetCity}.`);
-      }
-    } catch (error) {
-      console.log('Weather refresh error:', error);
-      addMessage('assistant', `Sorry, I couldn't refresh the weather data for ${targetCity}.`);
-    }
-  };
-
-  // Refresh news data
-  const refreshNews = async (cityOrQuery?: string) => {
-    const query = (cityOrQuery || location).trim();
-    try {
-      const newsResponse = await newsService.searchNews(query, 'en');
-      
-      if (newsResponse.success && newsResponse.articles) {
-        setNewsData(newsResponse.articles);
-        addMessage('assistant', 'News updated! Here are recent headlines:\n\n' + newsService.formatNewsSummary(newsResponse.articles, 3));
-      } else {
-        addMessage('assistant', `Sorry, I couldn't find news for ${query}.`);
->>>>>>> 7b32c0d59f6f33b99f9202c3c957c8d6fb145ab5
       }
 
       // Reset form
@@ -787,13 +725,25 @@ function AppContent() {
       
       console.log('Reminder created and saved to Firestore:', reminderId);
     } catch (error) {
-<<<<<<< HEAD
       console.error('Error creating reminder:', error);
       Alert.alert('Error', 'Failed to create reminder. Please try again.');
-=======
-      console.log('News refresh error:', error);
-      addMessage('assistant', `Sorry, I couldn't refresh the news for ${query}.`);
->>>>>>> 7b32c0d59f6f33b99f9202c3c957c8d6fb145ab5
+    }
+  };
+
+  // Refresh weather data
+  const refreshWeather = async (city?: string) => {
+    const targetCity = (city || location).trim();
+    try {
+      const weatherData = await weatherService.getCurrentWeather(targetCity);
+      
+      if (weatherData) {
+        addMessage('assistant', `Weather updated! ${weatherService.formatWeatherDisplay(weatherData)}`);
+      } else {
+        addMessage('assistant', `Sorry, I couldn't fetch the latest weather data for ${targetCity}.`);
+      }
+    } catch (error) {
+      console.log('Weather refresh error:', error);
+      addMessage('assistant', `Sorry, I couldn't refresh the weather data for ${targetCity}.`);
     }
   };
 
@@ -927,6 +877,130 @@ function AppContent() {
     );
   };
 
+  // Generate AI smart replies
+  const generateSmartRepliesForMessage = async (message: string) => {
+    try {
+      const replies = await AISmartRepliesService.generateSmartReplies(message, 'personal assistant context');
+      setSmartReplies(replies);
+      setShowSmartReplies(true);
+    } catch (error) {
+      console.error('Failed to generate smart replies:', error);
+    }
+  };
+
+  // Handle smart reply selection
+  const handleSmartReplySelect = (reply: string) => {
+    setInputText(reply);
+    setShowSmartReplies(false);
+    // Auto-send the reply
+    processUserInput(reply);
+  };
+
+  // AI-powered reminder suggestions
+  const generateAIReminderSuggestion = async () => {
+    if (!inputText.trim()) return;
+    
+    try {
+      const suggestion = await AISmartRepliesService.generateReminderSuggestions(inputText);
+      
+      // Pre-fill the reminder form with AI suggestions
+      setReminderTitle(suggestion.title);
+      setReminderDescription(suggestion.description);
+      setReminderType(suggestion.type === 'meeting' ? 'meeting' : 'reminder');
+      setReminderPriority(suggestion.priority);
+      
+      // Show the reminder modal
+      setIsReminderModalVisible(true);
+      
+      addMessage('assistant', `🤖 I've suggested some details for your ${suggestion.type}. You can modify them before saving.`);
+    } catch (error) {
+      console.error('AI suggestion failed:', error);
+      addMessage('assistant', '❌ Failed to generate AI suggestions. Please create the reminder manually.');
+    }
+  };
+
+  // Test notification timing function
+  const testNotificationTiming = async () => {
+    try {
+      await initNotifications();
+      
+      // Schedule a test notification for 30 seconds from now
+      const testTime = Date.now() + 30000; // 30 seconds
+      console.log(`🧪 Testing notification scheduled for: ${new Date(testTime).toLocaleString()}`);
+      
+      const nid = await scheduleNotification({
+        id: `test_${Date.now()}`,
+        title: '🧪 Test Notification',
+        body: 'This test notification should appear in 30 seconds',
+        timestampMs: testTime,
+      });
+      
+      if (nid) {
+        addMessage('assistant', '🧪 Test notification scheduled for 30 seconds from now. Please wait to see if it arrives on time.');
+        
+        // Also test the 2-minute early alert system
+        const reminderTestTime = Date.now() + 180000; // 3 minutes from now
+        const alertIds = await scheduleReminderWithAlerts({
+          id: `test_reminder_${Date.now()}`,
+          title: '🧪 Test Reminder',
+          body: 'This is a test reminder to verify 2-minute early alerts',
+          timestampMs: reminderTestTime,
+          alertMinutes: [2], // Should trigger 1 minute from now
+        });
+        
+        if (alertIds.length > 0) {
+          addMessage('assistant', '🧪 Test reminder scheduled for 3 minutes from now with a 2-minute early alert (should arrive in 1 minute).');
+        }
+      } else {
+        addMessage('assistant', '❌ Failed to schedule test notification. Check notification permissions.');
+      }
+    } catch (error) {
+      console.error('Test notification failed:', error);
+      addMessage('assistant', '❌ Test notification failed. Please check your notification settings.');
+    }
+  };
+
+  // Check scheduled notifications function
+  const checkScheduledNotifications = async () => {
+    try {
+      const scheduled = await getScheduledNotifications();
+      console.log('📋 Currently scheduled notifications:', scheduled);
+      
+      if (scheduled.length === 0) {
+        addMessage('assistant', '📋 No notifications are currently scheduled.');
+      } else {
+        let message = `📋 Found ${scheduled.length} scheduled notifications:\n`;
+        scheduled.forEach((notif, index) => {
+          const triggerTime = notif.trigger?.timestamp;
+          if (triggerTime) {
+            const timeStr = new Date(triggerTime).toLocaleString();
+            const title = notif.notification?.title || 'Unknown';
+            message += `${index + 1}. "${title}" at ${timeStr}\n`;
+          }
+        });
+        addMessage('assistant', message);
+      }
+    } catch (error) {
+      console.error('Failed to check scheduled notifications:', error);
+      addMessage('assistant', '❌ Failed to check scheduled notifications.');
+    }
+  };
+
+  // Initialize app components
+  useEffect(() => {
+    const initializeApp = async () => {
+      await initNotifications();
+      
+      // Initialize AI Smart Replies with configured API key
+      AISmartRepliesService.init('AIzaSyADaMlOksQd-gYF-dNzhjMJAnePh5INY8g');
+      
+      // Initialize wake word detection
+      await initWakeWord();
+    };
+    
+    initializeApp();
+  }, []);
+
   // Render chat message
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     // Handle weather messages
@@ -1036,7 +1110,7 @@ function AppContent() {
   // Show loading screen while initializing
   if (initializing) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingTop: safeAreaInsets.top }]}>
         <Text style={styles.loadingText}>🤖</Text>
         <Text style={styles.loadingSubtext}>Initializing AI Assistant...</Text>
       </View>
@@ -1048,6 +1122,20 @@ function AppContent() {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
+  // Show user profile if requested
+  if (showUserProfile && userData) {
+    return (
+      <UserProfileScreen
+        user={userData}
+        onUserUpdate={(updatedUser: User) => {
+          setUserData(updatedUser);
+          setUserName(updatedUser.name);
+        }}
+        onClose={() => setShowUserProfile(false)}
+      />
+    );
+  }
+
   return (
     <View style={[styles.container, { paddingTop: safeAreaInsets.top }]}>
       {/* Header */}
@@ -1056,13 +1144,6 @@ function AppContent() {
           <View style={styles.headerLeft}>
             <Text style={styles.headerTitle}>AI Personal Assistant</Text>
             <Text style={styles.userGreeting}>Welcome, {userName}!</Text>
-<<<<<<< HEAD
-=======
-            <TouchableOpacity onPress={refreshWeather} style={styles.weatherContainer}>
-              <Text style={styles.weatherInfo}>
-                {weatherData ? weatherService.getWeatherEmoji(weatherData.icon) : '🌤️'} {weather}
-              </Text>
-                </TouchableOpacity>
             <View style={styles.locationRow}>
               <TextInput
                 style={styles.locationInput}
@@ -1093,7 +1174,6 @@ function AppContent() {
               </TouchableOpacity>
               <Text style={styles.currentLocationText}>📍 {location}</Text>
             </View>
->>>>>>> 7b32c0d59f6f33b99f9202c3c957c8d6fb145ab5
           </View>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutButtonText}>Logout</Text>
@@ -1116,51 +1196,31 @@ function AppContent() {
           </TouchableOpacity>
           
           <TouchableOpacity 
-            style={styles.scheduleButton} 
+            style={styles.remindersButton} 
             onPress={async () => {
-              // Test notification - schedule for 10 seconds from now
-              await initNotifications();
-              const testTime = Date.now() + 10000; // 10 seconds from now
-              const nid = await scheduleNotification({
-                id: `test_${Date.now()}`,
-                title: '🔔 Test Notification',
-                body: 'This is a test notification to verify your notification system is working!',
-                timestampMs: testTime,
-              });
-              
-              if (nid) {
-                addMessage('assistant', '🔔 Test notification scheduled for 10 seconds from now! You should receive it shortly.');
+              if (currentUserId) {
+                // Fetch fresh reminders from Firestore
+                const userReminders = await firestoreService.getReminders(currentUserId);
+                if (userReminders.length > 0) {
+                  const remindersList = await Promise.all(userReminders.map(async r => {
+                    const status = await getReminderNotificationStatus(`reminder_${r.id}`);
+                    const statusText = status.scheduled > 0 ? `📱 ${status.scheduled} alerts` : '❌ No alerts';
+                    return `• ${r.title} (${r.dueDate.toLocaleDateString()} ${r.dueDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}) - ${statusText}`;
+                  }));
+                  addMessage('assistant', `Here are your reminders:\n\n${remindersList.join('\n')}`);
+                } else {
+                  addMessage('assistant', "You don't have any reminders scheduled yet.");
+                }
               } else {
-                addMessage('assistant', '❌ Failed to schedule test notification. Please check your notification permissions.');
+                if (reminders.length > 0) {
+                  const remindersList = reminders.map(r => `• ${r.title} (${r.date} ${r.time})`).join('\n');
+                  addMessage('assistant', `Here are your reminders:\n\n${remindersList}`);
+                } else {
+                  addMessage('assistant', "You don't have any reminders scheduled yet.");
+                }
               }
             }}
           >
-            <Text style={styles.scheduleButtonText}>🔔 Test Notification</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.remindersButton} onPress={async () => {
-            if (currentUserId) {
-              // Fetch fresh reminders from Firestore
-              const userReminders = await firestoreService.getReminders(currentUserId);
-              if (userReminders.length > 0) {
-                const remindersList = await Promise.all(userReminders.map(async r => {
-                  const status = await getReminderNotificationStatus(`reminder_${r.id}`);
-                  const statusText = status.scheduled > 0 ? `📱 ${status.scheduled} alerts` : '❌ No alerts';
-                  return `• ${r.title} (${r.dueDate.toLocaleDateString()} ${r.dueDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}) - ${statusText}`;
-                }));
-                addMessage('assistant', `Here are your reminders:\n\n${remindersList.join('\n')}`);
-              } else {
-                addMessage('assistant', "You don't have any reminders scheduled yet.");
-              }
-            } else {
-              if (reminders.length > 0) {
-                const remindersList = reminders.map(r => `• ${r.title} (${r.date} ${r.time})`).join('\n');
-                addMessage('assistant', `Here are your reminders:\n\n${remindersList}`);
-              } else {
-                addMessage('assistant', "You don't have any reminders scheduled yet.");
-              }
-            }
-          }}>
             <Text style={styles.remindersButtonText}>🔔 View Reminders ({reminders.length})</Text>
           </TouchableOpacity>
         </View>
@@ -1178,25 +1238,45 @@ function AppContent() {
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
       />
 
+      {/* Smart Replies */}
+      {showSmartReplies && smartReplies.length > 0 && (
+        <View style={styles.smartRepliesContainer}>
+          <Text style={styles.smartRepliesTitle}>💡 Smart Replies:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {smartReplies.map((reply, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.smartReplyButton}
+                onPress={() => handleSmartReplySelect(reply)}
+              >
+                <Text style={styles.smartReplyText}>{reply}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
       {/* Input Section */}
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.textInput}
-          placeholder="Ask me anything..."
-          placeholderTextColor="#CCCCCC"
           value={inputText}
           onChangeText={setInputText}
+          placeholder="Ask me anything..."
           multiline
           maxLength={500}
         />
-        
-        <TouchableOpacity
-          style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]} 
-          onPress={handleSend}
-          disabled={!inputText.trim()}
-        >
-          <Text style={styles.sendButtonText}>Send</Text>
-        </TouchableOpacity>
+        <View style={styles.inputActions}>
+          <TouchableOpacity 
+            style={styles.aiSuggestButton} 
+            onPress={generateAIReminderSuggestion}
+          >
+            <Text style={styles.aiSuggestButtonText}>🤖 AI</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.sendButton} onPress={handleSend}>
+            <Text style={styles.sendButtonText}>Send</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Voice Button */}
@@ -1340,6 +1420,23 @@ function AppContent() {
           </View>
         </View>
       </Modal>
+
+      {/* Test notification function for debugging */}
+      <View style={styles.testButtonsContainer}>
+        <TouchableOpacity 
+          style={styles.testButton} 
+          onPress={testNotificationTiming}
+        >
+          <Text style={styles.testButtonText}>🧪 Test</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.testButton} 
+          onPress={checkScheduledNotifications}
+        >
+          <Text style={styles.testButtonText}>📋 Check</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -1485,6 +1582,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     textAlign: 'center',
   },
+  weatherInfo: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontWeight: '500',
+  },
   weatherDescription: {
     fontSize: 16,
     color: '#FFFFFF',
@@ -1565,6 +1668,11 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     marginRight: 10,
   },
+  inputActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+  },
   sendButton: {
     backgroundColor: '#008080',
     paddingHorizontal: 20,
@@ -1625,7 +1733,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-<<<<<<< HEAD
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    gap: 8,
+  },
+  locationInput: {
+    flex: 1,
+    backgroundColor: '#2C2C4A',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: '#FFFFFF',
+    fontSize: 14,
+  },
+  setLocationButton: {
+    backgroundColor: '#008080',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  setLocationButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  currentLocationText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+  },
   // Modal styles
   modalContainer: {
     flex: 1,
@@ -1755,37 +1892,59 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#FFFFFF',
     textAlign: 'center',
-=======
-  locationRow: {
+  },
+  testButtonsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    gap: 8,
+    justifyContent: 'space-between',
+    padding: 10,
   },
-  locationInput: {
-    flex: 1,
-    backgroundColor: '#2C2C4A',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    color: '#FFFFFF',
-    fontSize: 14,
-  },
-  setLocationButton: {
+  testButton: {
     backgroundColor: '#008080',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 8,
+    flex: 1,
+    marginHorizontal: 5,
   },
-  setLocationButtonText: {
+  testButtonText: {
     color: '#FFFFFF',
     fontWeight: 'bold',
     fontSize: 12,
+    textAlign: 'center',
   },
-  currentLocationText: {
+  smartRepliesContainer: {
+    backgroundColor: '#2C2C4A',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  smartRepliesTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
     color: '#FFFFFF',
-    fontSize: 12,
->>>>>>> 7b32c0d59f6f33b99f9202c3c957c8d6fb145ab5
+    marginBottom: 5,
+  },
+  smartReplyButton: {
+    backgroundColor: '#3C3C5A',
+    padding: 10,
+    borderRadius: 8,
+    marginHorizontal: 5,
+  },
+  smartReplyText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+  },
+  aiSuggestButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginRight: 10,
+  },
+  aiSuggestButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 14,
   },
 });
 
